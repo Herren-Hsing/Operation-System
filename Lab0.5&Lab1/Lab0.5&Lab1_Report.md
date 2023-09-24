@@ -1,6 +1,7 @@
 # OS Lab 0.5 & Lab 1 
 
 > Contributors：焦心雨(2112536)、李艺楠(2110246)、辛浩然(2112514)
+>
 > [GitHub链接](https://github.com/Herren-Hsing/Operation-System)
 
 ## Lab 0.5 练习：使用GDB验证启动流程
