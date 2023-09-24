@@ -716,7 +716,7 @@ csrr s4, scause
 - 我们可以把`sp`保存到未保存的`sscratch`里，是因为我们知道的`sscratch`的值是0。当操作系统处于用户态时，` sscratch` 保存内核栈地址；处于内核态时，`sscratch `为0。因为我们处于S-Mode，在`idt_init()`函数里规定了`write_csr(sscratch, 0)`；
 - 在栈扩张后，`sp`指向内核栈， `sscratch` 指向中断前的栈。
 
-`csrrw s0, sscratch, x0`把旧的`sp`从`sscratch`中赋值给`s0`，然后将`sp`置为`0`(`x0`寄存器恒为`0`)
+`csrrw s0, sscratch, x0`把旧的`sp`从`sscratch`中赋值给`s0`，然后将`sscratch`置为`0`(`x0`寄存器恒为`0`)
 
 - RISCV不能直接从`csr`写入内存，因此需要将`sscratch`写入通用寄存器`s0`；
   - 这是可以的，因为我们之前已经保存完所有的通用寄存器了；
