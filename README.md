@@ -28,3 +28,16 @@ Main explorations include:
 - The process of interrupt handling.
 
 In [the relevant folder](https://github.com/Herren-Hsing/Operation-System/tree/main/Lab0.5%26Lab1), we have uploaded the code and experimental report for both Lab 0.5 and Lab 1.
+
+## Lab 2
+
+In Lab2, we gained an understanding of the process of physical memory management and attempted to create a simple physical memory management system ourselves. 
+
+Main explorations include: 
+
+- Understanding the first-fit continuous physical memory allocation algorithm.
+- Implementing the Best-Fit continuous physical memory allocation algorithm.
+- Implementing the Buddy System allocation algorithm.
+- Implementing the Slub allocation algorithm for memory units of arbitrary sizes.
+
+In [the relevant folder](https://github.com/Herren-Hsing/Operation-System/tree/main/Lab2), we have uploaded the code and experimental report for Lab 2.
