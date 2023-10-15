@@ -1,0 +1,2 @@
+- If using the Buddy System management algorithm, modify `pmm_manager` to `&buddy_pmm_manager` in the `pmm.c` file.
+- If using the simplified Slub algorithm, uncomment the line `kmem_init();` in the `kern_init` function in the `init.c` file.
