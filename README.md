@@ -41,3 +41,15 @@ Main explorations include:
 - Implementing the Slub allocation algorithm for memory units of arbitrary sizes.
 
 In [the relevant folder](https://github.com/Herren-Hsing/Operation-System/tree/main/Lab2), we have uploaded the code and experimental report for Lab 2.
+
+## Lab 3
+
+In Lab3, we utilized the page table mechanism and the interrupt exception handling mechanism discussed in Lab 1 to complete the implementation of Page Fault exception handling and a partial page replacement algorithm. This, combined with the cache space provided by the disk, allows us to support virtual memory management.
+
+Main explorations include: 
+
+- Understanding the implementation of Page Fault exception handling for virtual memory.
+- Understanding the implementation of page replacement algorithms in the operating system.
+- Learning how to use multi-level page tables to handle page faults and implement page replacement algorithms.
+
+In [the relevant folder](https://github.com/Herren-Hsing/Operation-System/tree/main/Lab3), we have uploaded the code and experimental report for Lab 3.
