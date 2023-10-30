@@ -213,10 +213,10 @@
 `do_pgfault `函数的第三个参数是导致内存访问异常的地址，首先他会调用` find_vma(mm, addr)`在当前使用的`mm_struct`内存管理器中搜寻该虚拟地址是否在所管理的虚拟内存范围内，即虚拟地址对应的VMA是否存在。
 
 - ```C
-├── find_vma(mm, addr); // 寻找某个虚拟地址是否合法
-│   ├── list_next(le) // 遍历vma_struct时找到下一个链表指针
-│   ├── le2vma(le, list_link) // 将链表指针转化为vma_struct结构
-
+   ├── find_vma(mm, addr); // 寻找某个虚拟地址是否合法
+   │   ├── list_next(le) // 遍历vma_struct时找到下一个链表指针
+   │   ├── le2vma(le, list_link) // 将链表指针转化为vma_struct结构
+   ```
 - `find_vma()`函数能够在一个`mm_struct`维护的链表中扫描所有的`vma_struct`，判断指定的地址`addr`是否在其中任意一个`vma_struct`中。`find_vma()`函数首先会使用缓存的 `vma `结构体`mmap_cache`来加速查找该虚拟地址。如果没有找到则会使用`list_next(le)`遍历`vma_struct`结构体链表`mmap_list`，使用`le2vma(le, list_link)`函数将其中每一个链表指针转化为`vma_struct`结构体，并且判断`addr`是否存在于`vma_struct`中，如果找到了则将该地址所在的`vma_struct`结构体设置为缓存结构体，并返回该结构体；如果未找到则返回NULL，说明查询的虚拟地址不存在/不合法，既不对应内存里的某个页，也不对应硬盘里某个可以换进来的页。
 
 如果该地址是合法的，那么我们就需要为它**构造一个页表项**，并根据所在VMA的读写权限使用一些PTE_U、PTE_R、PTE_W等宏设置好页面权限。因此，接下来使用 `ROUNDDOWN(addr, PGSIZE)`函数将地址向下对齐到页面大小的边界，尝试使用`get_pte()`函数**寻找该页面错误地址对应的页表项**。
