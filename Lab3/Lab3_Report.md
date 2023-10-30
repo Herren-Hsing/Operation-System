@@ -260,13 +260,14 @@
 如果对应页表项的内容每一位都全为0，说明**页表项之前并不存在**，需要设置对应的数据，进行线性地址与物理地址的映射。调用`pgdir_alloc_page()`函数<u>**分配一个页面大小的内存，并建立地址映射**</u>。
 
 - ```C
-├── pgdir_alloc_page()// 分配一个页面大小的内存，并建立地址映射
-│   ├── alloc_page()//分配一个页面大小的内存
-│   ├── page_insert(pgdir, page, la, perm)//该页面映射到线性地址 la
-│   ├── free_page(page)//释放之前分配的页面结构体
-│   ├── swapfs_write()//将数据写入磁盘中
-│   ├── swap_map_swappable(check_mm_struct, la, page, 0)//标记页面为可交换的
-│   ├── assert(page_ref(page) == 1) //确保页面的引用计数为 1 
+   ├── pgdir_alloc_page()// 分配一个页面大小的内存，并建立地址映射
+   │   ├── alloc_page()//分配一个页面大小的内存
+   │   ├── page_insert(pgdir, page, la, perm)//该页面映射到线性地址 la
+   │   ├── free_page(page)//释放之前分配的页面结构体
+   │   ├── swapfs_write()//将数据写入磁盘中
+   │   ├── swap_map_swappable(check_mm_struct, la, page, 0)//标记页面为可交换的
+   │   ├── assert(page_ref(page) == 1) //确保页面的引用计数为 1 
+   ```
 
 - 首先调用`alloc_page`分配页面。如果<u>分配页面时试图得到空闲页且没有空闲的物理页时，需要换出页面到硬盘上</u>。
 
