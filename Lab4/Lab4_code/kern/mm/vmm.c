@@ -370,19 +370,23 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
         *    page_insert ： 建立一个Page的phy addr与线性addr la的映射
         *    swap_map_swappable ： 设置页面可交换
         */
-        if (swap_init_ok) {
+       if (swap_init_ok)
+        {
+            //(1）According to the mm AND addr, try to load the content of right disk page into the memory which page managed.
             struct Page *page = NULL;
-            // 你要编写的内容在这里，请基于上文说明以及下文的英文注释完成代码编写
-            //(1）According to the mm AND addr, try
-            //to load the content of right disk page
-            //into the memory which page managed.
-            //(2) According to the mm,
-            //addr AND page, setup the
-            //map of phy addr <--->
-            //logical addr
+            if ((ret = swap_in(mm, addr, &page) != 0))
+            {
+                goto failed;
+            }
+            
+            page_insert(mm->pgdir, page, addr, perm); 
+            //(2) According to the mm, addr AND page, setup the map of phy addr <---> virtual addr
+            swap_map_swappable(mm, addr, page, 1); 
             //(3) make the page swappable.
             page->pra_vaddr = addr;
-        } else {
+        }
+        else
+        {
             cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);
             goto failed;
         }
