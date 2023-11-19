@@ -599,7 +599,15 @@ ucore调用`get_pid`函数，为每个新线程分配PID，而分析`get_pid`的
 
    `idleproc`内核线程主要工作是完成内核中各个子系统的初始化，然后就通过执行`cpu_idle`函数让出CPU，给其它内核线程执行了。所以`uCore`需要创建`initproc`内核线程来完成各种工作。
 
-   在`proc_init`函数中，会调用函数`kernel_thread`创建内核线程，并判断是否创建成功。创建成功后，根据其进程ID将其设置为 `initproc`，并为 `initproc` 设置进程名为 `init`。由此完成`initproc`内核线程的创建。相关代码如下：
+   在`proc_init`函数中，会调用函数`kernel_thread`创建内核线程，并判断是否创建成功。
+
+   通过`kernel_thread`函数，构造一个临时的`trap_frame`栈帧。`s0` 寄存器保存内核线程的函数指针，就是`init_main`函数；`s1` 寄存器保存函数参数；`tf.epc`中写入从中断返回后的地址。也就是`initproc`内核线程从哪里开始执行，是`kernel_thread_entry`，这是进程执行的入口函数。
+
+   通过`do_fork`分配一个未初始化的线程控制块`proc_struct`，设置并初始化其一系列状态。将`init_proc`加入ucore的就绪队列，等待CPU调度。
+
+   通过`copy_thread`中设置中断栈帧数据和上下文`struct context`中`sp`与`ra`的值，令上下文切换`switch`返回后跳转到`forkret`处。
+
+   创建成功后，根据其进程ID将其设置为 `initproc`，并为 `initproc` 设置进程名为 `init`。由此完成`initproc`内核线程的创建。相关代码如下：
 
    ```c#
    	int pid = kernel_thread(init_main, "Hello world!!", 0);  // 创建内核线程返回其进程 ID
