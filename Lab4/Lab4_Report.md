@@ -615,7 +615,9 @@ ucore调用`get_pid`函数，为每个新线程分配PID，而分析`get_pid`的
 
    `idleproc`线程完成各个子系统的初始化后执行`cpu_idle`函数让出CPU，会马上调用`schedule`函数找其他处于就绪态的进程执行。
 
-   在`schedule`函数中，会先设置当前内核线程`current->need_resched`为0，然后在`proc_list`队列中查找下一个处于“就绪”态的线程或进程next。找到这样的进程后，就调用`proc_run`函数，保存当前进程current的执行现场（进程上下文），恢复新进程的执行现场，完成进程切换。由于在`proc_list`中只有两个内核线程，且`idleproc`要让出CPU给`initproc`执行，因此schedule函数通过查找`proc_list`进程队列，只能找到一个处于“就绪”态的`initproc`内核线程。并通过`proc_run`和进一步的`switch_to`函数完成两个执行现场的切换。由此完成了从内核线程`idleproc`到内核线程`idleproc`的切换。
+   在`schedule`函数中，会先设置当前内核线程`current->need_resched`为0，然后在`proc_list`队列中查找下一个处于“就绪”态的线程或进程next。找到这样的进程后，就调用`proc_run`函数，保存当前进程current的执行现场（进程上下文），恢复新进程的执行现场，完成进程切换。由于在`proc_list`中只有两个内核线程，且`idleproc`要让出CPU给`initproc`执行，因此schedule函数通过查找`proc_list`进程队列，只能找到一个处于“就绪”态的`initproc`内核线程。并通过`proc_run`和进一步的`switch_to`函数完成两个执行现场的切换。
+   
+   `switch_to`返回时，CPU开始执行`init_proc`的执行流，跳转至之前构造好的`forkret`处。`forkret`中，进行中断返回。将之前存放在内核栈中的中断栈帧中的数据依次弹出，最后跳转至`kernel_thread_entry`处。`kernel_thread_entry`中，利用之前在中断栈中设置好的`s0`和`s1`执行真正的`init_proc`业务逻辑的处理(`init_main`函数)，在`init_main`返回后，跳转至`do_exit`终止退出。
 
 
 ## 扩展练习 Challenge：
