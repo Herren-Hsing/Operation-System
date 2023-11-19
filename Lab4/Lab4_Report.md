@@ -151,8 +151,8 @@ context结构体的定义如下：
 struct context {
     uintptr_t ra;// 返回地址
     uintptr_t sp;// 栈指针
-    uintptr_t s0;// 保存的寄存器/帧指针
-    uintptr_t s1;// 保存寄存器，下同
+    uintptr_t s0;// 保存的函数指针
+    uintptr_t s1;// 保存函数参数
     uintptr_t s2;
     uintptr_t s3;
     uintptr_t s4;
@@ -269,33 +269,34 @@ switch_to:
 
 ```C
 struct trapframe {
-    struct pushregs gpr;//包含众多寄存器的结构体
+    struct pushregs gpr;//包含众多寄存器
     uintptr_t status;//处理器的状态
-    uintptr_t epc;//异常程序计数器
-    uintptr_t badvaddr;//错误虚拟地址
+    uintptr_t epc;//触发中断的指令的地址
+    uintptr_t badvaddr;//最近一次导致发生地址错误的虚地址
     uintptr_t cause;//异常或中断的原因
 };
 ```
 
 参数的具体含义在`Lab1`中已经了解过，本次实验需要对`status`与`gpr`再进行进一步说明：
 
-- `status`：`status`寄存器的全称是`status register`，它包含了工作状态的许多标志位，如下图所示：
+1. `status`：`status`寄存器的全称是`status register`，它包含了工作状态的许多标志位，如下图所示：
 
-  ![img](https://pic2.zhimg.com/v2-6e7ef91986b408cb38cb82a5ac4acb35_r.jpg)
+![img](https://pic2.zhimg.com/v2-6e7ef91986b408cb38cb82a5ac4acb35_r.jpg)
 
-  在本次实验中，我们主要用到了`sstatus`寄存器的`SPP`、`SIE`、`SPIE`位，具体解释如下：	
+​	在本次实验中，我们主要用到了`sstatus`寄存器的`SPP`、`SIE`、`SPIE`位，具体解释如下：	
 
-  - `SPP`位
-    `SPP`记录的是在进入S-Mode之前处理器的特权级别，为0表示陷阱源自用户模式(U-Mode)，为1表示其他模式。当执行一个陷阱时，`SPP`会由硬件自动根据当前处理器所处的状态自动设置为0或者1。当执行`SRET`指令从陷阱中返回时，如果`SPP`位为0，那么处理器将会返回U-Mode，为1则会返回S-Mode，最后无论如何，`SPP`都被设置为0。
-  - `SIE`位
-    SIE位是S-Mode下中断的总开关。如果SIE位置为0，那么无论在S-Mode下发生什么中断，处理器都不会响应。但是如果当前处理器运行在U-Mode，那么这一位不论是0还是1，S-Mode下的中断都是默认打开的。也就是说在任何时候S-Mode都有权因为自己的中断而抢占位于U-Mode下的处理器。
+- **`SPP` 位:**
+  - `SPP` 记录进入 S-Mode 之前处理器的特权级别。值为 0 表示陷阱源自用户模式（U-Mode），值为 1 表示其他模式。在执行陷阱时，硬件会自动根据当前处理器状态自动设置 `SPP` 为 0 或 1。
+  - 在执行 `SRET` 指令从陷阱中返回时，若 `SPP` 为 0，则处理器返回至 U-Mode；若 `SPP` 为 1，则返回至 S-Mode。最终，不论如何，`SPP` 都会被设置为 0。
+- **`SIE` 位:**
+  - `SIE` 位是 S-Mode 下中断的总开关。若 `SIE` 为 0，则在 S-Mode 下发生的任何中断都不会得到响应。但是，如果当前处理器运行在 U-Mode 下，那么不论 `SIE` 为 0 还是 1，在 S-Mode 下的中断都默认是打开的。换言之，在任何时候，S-Mode 都有权因为自身的中断而抢占运行在 U-Mode 下的处理器。
+- **`SPIE` 位:**
+  - `SPIE` 位记录进入 S-Mode 之前 S-Mode 中断是否开启。在进入陷阱时，硬件会自动将 `SIE` 位的值保存到 `SPIE` 位上，相当于记录原先 `SIE` 的值，并将 `SIE` 置为 0。这表示硬件不希望在处理一个陷阱的同时被其他中断打扰，从硬件实现逻辑上来说，不支持嵌套中断。
+  - 当使用 `SRET` 指令从 S-Mode 返回时，`SPIE` 的值会重新放置到 `SIE` 位上来恢复原先的值，并将 `SPIE` 的值置为 1。
 
-- `SPIE`位
-  `SPIE`位记录的是在进入S-Mode之前S-Mode中断是否开启。当进入陷阱时，硬件会自动将`SIE`位放置到`SPIE`位上，相当于起到了记录原先`SIE`值的作用，并最后将`SIE`置为0，表明硬件不希望在处理一个陷阱的同时被其他中断所打扰，也就是从硬件的实现逻辑上来说不支持嵌套中断。当使用`SRET`指令从S-Mode返回时，`SPIE`的值会重新放置到`SIE`位上来恢复原先的值，并且将`SPIE`的值置为1。
+2. `pushregs gpr`
 
-- `pushregs gpr`
-
-  `pushregs` 的结构体，包含了一系列寄存器如下：		
+   `pushregs` 的结构体，包含了一系列寄存器如下：		
 
 ```C
 struct pushregs {
@@ -616,7 +617,7 @@ ucore调用`get_pid`函数，为每个新线程分配PID，而分析`get_pid`的
    `idleproc`线程完成各个子系统的初始化后执行`cpu_idle`函数让出CPU，会马上调用`schedule`函数找其他处于就绪态的进程执行。
 
    在`schedule`函数中，会先设置当前内核线程`current->need_resched`为0，然后在`proc_list`队列中查找下一个处于“就绪”态的线程或进程next。找到这样的进程后，就调用`proc_run`函数，保存当前进程current的执行现场（进程上下文），恢复新进程的执行现场，完成进程切换。由于在`proc_list`中只有两个内核线程，且`idleproc`要让出CPU给`initproc`执行，因此schedule函数通过查找`proc_list`进程队列，只能找到一个处于“就绪”态的`initproc`内核线程。并通过`proc_run`和进一步的`switch_to`函数完成两个执行现场的切换。
-   
+
    `switch_to`返回时，CPU开始执行`init_proc`的执行流，跳转至之前构造好的`forkret`处。`forkret`中，进行中断返回。将之前存放在内核栈中的中断栈帧中的数据依次弹出，最后跳转至`kernel_thread_entry`处。`kernel_thread_entry`中，利用之前在中断栈中设置好的`s0`和`s1`执行真正的`init_proc`业务逻辑的处理(`init_main`函数)，在`init_main`返回后，跳转至`do_exit`终止退出。
 
 
@@ -669,7 +670,7 @@ static inline bool __intr_save(void) {  // 内联函数：保存中断状态
 }
 ```
 
-在这个函数中，首先通过`read_csr(sstatus)`函数来读取`sstatus` 寄存器，并且检查当前 CPU 核的中断状态。如果能够正常读取`sstatus` 寄存器并且`SIE`位置一，那么说明当前允许中断，那么就会调用`intr_disable()`函数禁用中断。
+在这个函数中，首先通过`read_csr(sstatus)`函数来读取`sstatus` 寄存器，并且检查当前 CPU 核的中断状态。如果能够正常读取`sstatus` 寄存器并且`SIE`位置一，那么说明当前允许中断，那么就会调用`intr_disable()`函数禁用中断，如果不能够正常读取或者是SIE位置零表示已经禁用中断， `__intr_save()`函数返回0。
 
 `intr_disable()`函数定义如下：
 
@@ -680,13 +681,16 @@ void intr_disable(void) { clear_csr(sstatus, SSTATUS_SIE); }
 我们在`riscv.h`中查看关于寄存器操作的函数如下：
 
 ```c
-#define clear_csr(reg, bit) ({ unsigned long __tmp; \  // 定义一个宏，清除寄存器（reg）中的特定位（bit）
+// clear_csr(reg, bit)宏，清除寄存器（reg）中的特定位（bit）
+#define clear_csr(reg, bit) ({ unsigned long __tmp; \  
   asm volatile ("csrrc %0, " #reg ", %1" : "=r"(__tmp) : "rK"(bit)); \ 
   // 内联汇编语句，使用 RISC-V 指令 csrrc
   __tmp; })  // 返回清除特定位后的寄存器值
       
-#define read_csr(reg) ({ unsigned long __tmp; \  // 定义一个宏，用于读取指定寄存器（reg）的值
-  asm volatile ("csrr %0, " #reg : "=r"(__tmp)); \  // 内联汇编语句，使用 RISC-V 指令 csrr
+// read_csr(reg)宏，用于读取指定寄存器（reg）的值   
+#define read_csr(reg) ({ unsigned long __tmp; \  
+// 内联汇编语句，使用 RISC-V 指令 csrr
+  asm volatile ("csrr %0, " #reg : "=r"(__tmp)); \ 
   __tmp; })  // 返回寄存器的值
 ```
 
