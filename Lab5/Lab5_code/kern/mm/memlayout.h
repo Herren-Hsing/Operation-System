@@ -44,38 +44,39 @@
  *
  * */
 
-/* All physical memory mapped at this address */
+
 #define KERNBASE            0xFFFFFFFFC0200000
-#define KMEMSIZE            0x7E00000                  // the maximum amount of physical memory
+#define KMEMSIZE            0x7E00000                  // 物理内存的最大数量
 #define KERNTOP             (KERNBASE + KMEMSIZE)
 
+/* 内核虚拟空间的起始地址 */
 #define KERNEL_BEGIN_PADDR 0x80200000
 #define KERNEL_BEGIN_VADDR 0xFFFFFFFFC0200000
 #define PHYSICAL_MEMORY_END 0x88000000
 /* *
- * Virtual page table. Entry PDX[VPT] in the PD (Page Directory) contains
- * a pointer to the page directory itself, thereby turning the PD into a page
- * table, which maps all the PTEs (Page Table Entry) containing the page mappings
- * for the entire virtual address space into that 4 Meg region starting at VPT.
+ * 虚拟页表。PD（Page Directory）中的条目 PDX[VPT] 包含指向页目录本身的指针，
+ * 从而将 PD 转换为一个页表，它映射整个虚拟地址空间中包含页面映射的所有 PTE（Page Table Entry）
+ * 到从 VPT 开始的那个 4 Meg 区域。
  * */
 
-#define KSTACKPAGE          2                           // # of pages in kernel stack
-#define KSTACKSIZE          (KSTACKPAGE * PGSIZE)       // sizeof kernel stack
+#define KSTACKPAGE          2                           // 内核栈中的页面数
+#define KSTACKSIZE          (KSTACKPAGE * PGSIZE)       // 内核栈的大小
 
 #define USERTOP             0x80000000
 #define USTACKTOP           USERTOP
-#define USTACKPAGE          256                         // # of pages in user stack
-#define USTACKSIZE          (USTACKPAGE * PGSIZE)       // sizeof user stack
+#define USTACKPAGE          256                         // 用户栈中的页面数
+#define USTACKSIZE          (USTACKPAGE * PGSIZE)       // 用户栈的大小
 
 #define USERBASE            0x00200000
-#define UTEXT               0x00800000                  // where user programs generally begin
-#define USTAB               USERBASE                    // the location of the user STABS data structure
+#define UTEXT               0x00800000                  // 用户程序通常开始的地方
+#define USTAB               USERBASE                    // 用户 STABS 数据结构的位置
 
 #define USER_ACCESS(start, end)                     \
 (USERBASE <= (start) && (start) < (end) && (end) <= USERTOP)
 
 #define KERN_ACCESS(start, end)                     \
 (KERNBASE <= (start) && (start) < (end) && (end) <= KERNTOP)
+
 
 #ifndef __ASSEMBLER__
 
