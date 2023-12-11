@@ -6,23 +6,40 @@
 struct stat;
 struct dirent;
 
-int sysfile_open(const char *path, uint32_t open_flags);        // Open or create a file. FLAGS/MODE per the syscall.
-int sysfile_close(int fd);                                      // Close a vnode opened  
-int sysfile_read(int fd, void *base, size_t len);               // Read file
-int sysfile_write(int fd, void *base, size_t len);              // Write file
-int sysfile_seek(int fd, off_t pos, int whence);                // Seek file  
-int sysfile_fstat(int fd, struct stat *stat);                   // Stat file 
-int sysfile_fsync(int fd);                                      // Sync file
-int sysfile_chdir(const char *path);                            // change DIR  
-int sysfile_mkdir(const char *path);                            // create DIR
-int sysfile_link(const char *path1, const char *path2);         // set a path1's link as path2
-int sysfile_rename(const char *path1, const char *path2);       // rename file
-int sysfile_unlink(const char *path);                           // unlink a path
-int sysfile_getcwd(char *buf, size_t len);                      // get current working directory
-int sysfile_getdirentry(int fd, struct dirent *direntp);        // get the file entry in DIR 
-int sysfile_dup(int fd1, int fd2);                              // duplicate file
-int sysfile_pipe(int *fd_store);                                // build PIPE   
-int sysfile_mkfifo(const char *name, uint32_t open_flags);      // build named PIPE
+// 打开或创建一个文件，open_flags 参数根据系统调用而定
+int sysfile_open(const char *path, uint32_t open_flags);
+// 关闭一个已打开的 vnode（虚拟节点）
+int sysfile_close(int fd);
+// 读取文件内容
+int sysfile_read(int fd, void *base, size_t len);
+// 写入文件内容
+int sysfile_write(int fd, void *base, size_t len);
+// 移动文件指针位置
+int sysfile_seek(int fd, off_t pos, int whence);
+// 获取文件状态信息
+int sysfile_fstat(int fd, struct stat *stat);
+// 同步文件，确保数据被写入到磁盘
+int sysfile_fsync(int fd);
+// 切换当前工作目录
+int sysfile_chdir(const char *path);
+// 创建目录
+int sysfile_mkdir(const char *path);
+// 创建文件硬链接
+int sysfile_link(const char *path1, const char *path2);
+// 重命名文件或目录
+int sysfile_rename(const char *path1, const char *path2);
+// 删除文件或目录
+int sysfile_unlink(const char *path);
+// 获取当前工作目录
+int sysfile_getcwd(char *buf, size_t len);
+// 获取目录中的文件条目
+int sysfile_getdirentry(int fd, struct dirent *direntp);
+// 复制文件描述符
+int sysfile_dup(int fd1, int fd2);
+// 创建管道
+int sysfile_pipe(int *fd_store);
+// 创建命名管道
+int sysfile_mkfifo(const char *name, uint32_t open_flags);
 
 #endif /* !__KERN_FS_SYSFILE_H__ */
 

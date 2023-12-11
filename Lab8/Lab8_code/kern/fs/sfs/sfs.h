@@ -35,27 +35,25 @@
 #define SFS_TYPE_LINK                               3
 
 /*
- * On-disk superblock
+ * 磁盘上的 superblock
  */
 struct sfs_super {
-    uint32_t magic;                                 /* magic number, should be SFS_MAGIC */
-    uint32_t blocks;                                /* # of blocks in fs */
-    uint32_t unused_blocks;                         /* # of unused blocks in fs */
-    char info[SFS_MAX_INFO_LEN + 1];                /* infomation for sfs  */
+    uint32_t magic;                                 /* 魔数，应为 SFS_MAGIC */
+    uint32_t blocks;                                /* 文件系统中的块数 */
+    uint32_t unused_blocks;                         /* 文件系统中未使用的块数 */
+    char info[SFS_MAX_INFO_LEN + 1];                /* sfs 的信息 */
 };
+
 
 /* inode (on disk) */
 struct sfs_disk_inode {
-    uint32_t size;                                  /* size of the file (in bytes) */
-    uint16_t type;                                  /* one of SYS_TYPE_* above */
-    uint16_t nlinks;                                /* # of hard links to this file */
-    uint32_t blocks;                                /* # of blocks */
-    uint32_t direct[SFS_NDIRECT];                   /* direct blocks */
-    uint32_t indirect;                              /* indirect blocks */
-//    uint32_t db_indirect;                           /* double indirect blocks */
-//   unused
+    uint32_t size;                              //如果inode表示常规文件，则size是文件大小
+    uint16_t type;                              //inode的文件类型
+    uint16_t nlinks;                            //此inode的硬链接数
+    uint32_t blocks;                            //此inode的数据块数的个数
+    uint32_t direct[SFS_NDIRECT];               //此inode的直接数据块索引值（有SFS_NDIRECT个）
+    uint32_t indirect;                          //此inode的一级间接数据块索引值
 };
-
 /* file entry (on disk) */
 struct sfs_disk_entry {
     uint32_t ino;                                   /* inode number */
@@ -67,30 +65,32 @@ struct sfs_disk_entry {
 
 /* inode for sfs */
 struct sfs_inode {
-    struct sfs_disk_inode *din;                     /* on-disk inode */
-    uint32_t ino;                                   /* inode number */
-    bool dirty;                                     /* true if inode modified */
-    int reclaim_count;                              /* kill inode if it hits zero */
-    semaphore_t sem;                                /* semaphore for din */
-    list_entry_t inode_link;                        /* entry for linked-list in sfs_fs */
-    list_entry_t hash_link;                         /* entry for hash linked-list in sfs_fs */
+    struct sfs_disk_inode *din;          /* 指向磁盘上的inode结构体的指针 */
+    uint32_t ino;                        /* inode编号 */
+    uint32_t flags;                      /* inode标志位 */
+    bool dirty;                          /* 如果inode被修改过，则为true */
+    int reclaim_count;                   /* 当此计数为零时，释放inode资源 */
+    semaphore_t sem;                     /* 用于din的信号量 */
+    list_entry_t inode_link;             /* 在sfs_fs中用于链接的链表项 */
+    list_entry_t hash_link;              /* 在sfs_fs中用于哈希链接的链表项 */
 };
+
 
 #define le2sin(le, member)                          \
     to_struct((le), struct sfs_inode, member)
 
 /* filesystem for sfs */
 struct sfs_fs {
-    struct sfs_super super;                         /* on-disk superblock */
-    struct device *dev;                             /* device mounted on */
-    struct bitmap *freemap;                         /* blocks in use are mared 0 */
-    bool super_dirty;                               /* true if super/freemap modified */
-    void *sfs_buffer;                               /* buffer for non-block aligned io */
-    semaphore_t fs_sem;                             /* semaphore for fs */
-    semaphore_t io_sem;                             /* semaphore for io */
-    semaphore_t mutex_sem;                          /* semaphore for link/unlink and rename */
-    list_entry_t inode_list;                        /* inode linked-list */
-    list_entry_t *hash_list;                        /* inode hash linked-list */
+    struct sfs_super super;             /* 存储在磁盘上的超级块 */
+    struct device *dev;                 /* 挂载的设备 */
+    struct bitmap *freemap;             /* 用于标记已使用块的位图，被标记为0的块表示已使用 */
+    bool super_dirty;                   /* 如果超级块或位图被修改，则为true */
+    void *sfs_buffer;                   /* 用于非块对齐IO的缓冲区 */
+    semaphore_t fs_sem;                 /* 用于文件系统的信号量 */
+    semaphore_t io_sem;                 /* 用于IO的信号量 */
+    semaphore_t mutex_sem;              /* 用于链接/取消链接和重命名的信号量 */
+    list_entry_t inode_list;            /* i节点的链表 */
+    list_entry_t *hash_list;            /* i节点哈希链表 */
 };
 
 /* hash for sfs */

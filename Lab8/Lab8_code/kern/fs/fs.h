@@ -20,13 +20,13 @@ struct inode;
 struct file;
 
 /*
- * process's file related informaction
+ * 进程文件相关信息结构体
  */
 struct files_struct {
-    struct inode *pwd;      // inode of present working directory
-    struct file *fd_array;  // opened files array
-    int files_count;        // the number of opened files
-    semaphore_t files_sem;  // lock protect sem
+    struct inode *pwd;                //进程当前执行目录的内存inode指针
+    struct file *fd_array;            //进程打开文件的数组，文件数组后面分析
+    int files_count;            	  //访问此文件的线程个数
+    semaphore_t files_sem;            //确保对进程控制块中fs_struct的互斥访问
 };
 
 #define FILES_STRUCT_BUFSIZE                       (PGSIZE - sizeof(struct files_struct))

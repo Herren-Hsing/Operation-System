@@ -72,13 +72,13 @@ sfs_wblock(struct sfs_fs *sfs, void *buf, uint32_t blkno, uint32_t nblks) {
     return sfs_rwblock(sfs, buf, blkno, nblks, 1);
 }
 
-/* sfs_rbuf - The Basic block-level I/O routine for  Rd( non-block & non-aligned io) one disk block(using sfs->sfs_buffer)
- *            with lock protect for mutex process on Rd/Wr disk block
- * @sfs:    sfs_fs which will be process
- * @buf:    the buffer uesed for Rd
- * @len:    the length need to Rd
- * @blkno:  the NO. of disk block
- * @offset: the offset in the content of disk block
+/*
+ * sfs_rbuf - 用于对磁盘上的一个磁盘块进行基本的块级I/O操作（非块、非对齐I/O），使用sfs->sfs_buffer进行操作，同时提供锁保护以处理对磁盘块的互斥读/写。
+ * @sfs:    将要被处理的sfs_fs文件系统
+ * @buf:    用于读取的缓冲区
+ * @len:    需要读取的长度
+ * @blkno:  磁盘块的编号
+ * @offset: 磁盘块内容中的偏移量
  */
 int
 sfs_rbuf(struct sfs_fs *sfs, void *buf, size_t len, uint32_t blkno, off_t offset) {
