@@ -8,72 +8,11 @@ Contributors：焦心雨(2112536)、李艺楠(2110246)、辛浩然(2112514)
 
 ## 练习0：填写已有实验
 
-填写之前Lab中完成的代码，其中需要修改的部分包括：
+填写之前Lab中完成的代码，其中需要修改的部分包括`proc.c` 中的相关函数以及`schedule`相关函数。
 
-### alloc_proc
+### `proc.c` 文件
 
-由于在Lab6~8增加了进程控制块的成员变量：
-
-```c
-struct run_queue *rq;                   // 运行队列包含进程
-list_entry_t run_link;                  // 在运行队列中链接的条目
-int time_slice;                         // 占用CPU的时间片
-skew_heap_entry_t lab6_run_pool;        // 仅用于实验6：运行池中的条目
-uint32_t lab6_stride;                   // 仅用于实验6：进程的当前步幅
-uint32_t lab6_priority;                 // 仅用于实验6：进程的优先级，由lab6_set_priority(uint32_t)设置
-// Lab 8 新增
-struct files_struct *filesp;            // 进程的与文件相关的信息（pwd、files_count、files_array、fs_semaphore）
-```
-
-为了防止出现问题，在`alloc_proc`对所有成员变量都进行了初始化，新增部分的初始化如下：
-
-```c
-proc->rq = NULL;
-list_init(&(proc->run_link));
-proc->time_slice = 0;
-proc->lab6_run_pool.left = proc->lab6_run_pool.right = proc->lab6_run_pool.parent = NULL;
-proc->lab6_stride = 0;
-proc->lab6_priority = 0;
-proc->filesp = NULL       // filesp 初始为 NULL
-```
-
-### proc_run
-
-根据代码注释，在`proc_run`函数中，进行`switch_to`前刷新TLB。
-
-```c
-//LAB8 YOUR CODE : (update LAB4 steps)
-/*
- * below fields(add in LAB6) in proc_struct need to be initialized
- *       before switch_to();you should flush the tlb
- *        MACROs or Functions:
- *       flush_tlb():          flush the tlb        
- */
-bool intr_flag;
-struct proc_struct *prev = current, *next = proc;
-local_intr_save(intr_flag);
-{
-    current = proc;
-    lcr3(next->cr3);
-    flush_tlb();          // flush the tlb
-    switch_to(&(prev->context), &(next->context));
-}
-local_intr_restore(intr_flag);
-```
-
-### do_fork
-
-```c
-// 调用 copy_files 函数从当前进程复制 files_struct 到新进程
-if (copy_files(clone_flags, proc) != 0) { //for LAB8
-    goto bad_fork_cleanup_kstack;
-}
-// ...
-bad_fork_cleanup_fs:  //for LAB8
-	put_files(proc);
-```
-
-在`do_fork`函数中，创建新进程时，调用 `copy_files` 函数从当前进程复制 `files_struct `到新进程。如果复制失败，则调用`put_files`进行错误处理、销毁资源。
+此处修改细节详情见练习2。
 
 ### Round Robin 调度
 
@@ -83,7 +22,22 @@ bad_fork_cleanup_fs:  //for LAB8
 
 > 首先了解打开文件的处理流程，然后参考本实验后续的文件读写操作的过程分析，填写在` kern/fs/sfs/sfs_inode.c`中 的`sfs_io_nolock()`函数，实现读文件中数据的代码。
 
+首先从宏观上来梳理一个读写文件的流程：
+
+- 某一个进程调用了用户程序相关的库的接口。
+- 用户进程通过中断进入内核调用抽象层的接口。文件系统抽象层向上提供一个一致的接口给内核中文件系统相关的系统调用实现模块和其他内核功能模块访问，同时向下提供一个同样的抽象函数指针列表和数据结构屏蔽不同文件系统的实现细节。
+- 从抽象层进入操作系统的真正的文件系统，即SFS。
+- 文件系统调用硬盘io接口。
+
+而在读写文件之前，在内核初始化的时候调用`fs_init`进行了文件系统的初始化，主要包括：
+
+- `vfs_init`  初始化虚拟文件系统。具体为给引导文件系统bootfs的信号量置为1，让它能正常执行然后加载必要项，同时初始化vfs的设备列表，它的对应的信号量也置为1。
+- `dev_init` 初始化设备模块。将这次实验用到的stdin、stdout和磁盘disk0初始化。
+- `sfs_init` 初始化SFS文件系统。把disk0挂载，使其可以被访问和操作。
+
 ### 打开文件的处理流程
+
+1. 通用文件系统访问接口层：
 
 用户调用接口函数`open`，进一步调用`open->sys_open->syscall`，引起系统调用进入到内核态。
 
@@ -99,7 +53,11 @@ sys_open(arg[])  -->    sysfile_open("/testfile",...)   -->   file_open("/testfi
 	                             	ide_read_secs <-  d_io  <-   sfs_rbuf   <-|
 ```
 
-在`sysfile_open`内核函数中，需要把位于用户空间的字符串`__path`拷贝到内核空间中的字符串`path`中，然后调用了`file_open`。在`file_open`函数中，程序主要做了以下几个操作：
+在`sysfile_open`内核函数中，需要把位于用户空间的字符串`__path`拷贝到内核空间中的字符串`path`中，然后调用了`file_open`。
+
+2. 文件系统抽象层：
+
+在`file_open`函数中，程序主要做了以下几个操作：
 
 - 在当前进程的文件管理结构`filesp`中，获取一个空闲的`file`对象。
 - 调用`vfs_open`函数，并存储该函数返回的`inode`结构。
@@ -116,7 +74,9 @@ sys_open(arg[])  -->    sysfile_open("/testfile",...)   -->   file_open("/testfi
 
 通过调用`vop_lookup`函数来查找到根目录“/”下对应文件filetest的索引节点，如果找到就返回此索引节点。
 
-这个流程中，以vop开头的函数通过一些宏和函数的转发，最后变成对inode结构体里的inode_ops结构体的“成员函数”的调用。对于SFS文件系统的inode来说，会变成对sfs文件系统的具体操作。
+这个流程中，以vop开头的函数通过一些宏和函数的转发，最后变成对inode结构体里的inode_ops结构体的“成员函数”的调用。对于SFS文件系统的inode来说，会变成对sfs文件系统的具体操作，因此接下来会执行`sys_lookup`函数。
+
+3. SFS 文件系统层
 
 `sfs_lookup`有三个参数：`node`，`path`，`node_store`。其中`node`是根目录“/”所对应的inode节点；`path`是文件`sfs_filetest1`的绝对路径/filetest，而`node_store`是经过查找获得的filetest所对应的inode节点。
 
@@ -124,7 +84,11 @@ sys_open(arg[])  -->    sysfile_open("/testfile",...)   -->   file_open("/testfi
 
 `sfs_lookup_once`将调用`sfs_dirent_search_nolock`函数来查找与路径名匹配的目录项，如果找到目录项，则调用`sfs_load_inode`函数根据目录项中记录的`inode`所处的数据块索引值找到路径名对应的SFS磁盘`inode`，并读入SFS磁盘`inode`对应的内容，创建SFS内存`inode`。
 
+在打开文件的处理流程中，如果仅仅只是找到这个文件的描述符然后把它存起来，在这个过程中似乎不涉及到具体设备的交互。打开文件的操作也在sfs之后没有下文了。具体的文件操作在读写时会详细涉及。
+
 ### 读文件流程分析
+
+1. 通用文件系统访问接口层：
 
 依次调用如下用户态函数：`read->sys_read->syscall`，从而引起系统调用进入到内核态。
 
@@ -134,7 +98,88 @@ sys_open(arg[])  -->    sysfile_open("/testfile",...)   -->   file_open("/testfi
 - 在内核中创建一块缓冲区。
 - 循环执行`file_read`函数读取数据至缓冲区中，并将该缓冲区中的数据复制至用户内存（即传入`sysfile_read`的base指针所指向的内存）
 
-`file_read`函数是内核提供的一项文件读取函数。在`file_read`函数中，通过文件描述符查找到了相应文件对应的内存中的`inode`信息，然后转交给`vop_read`进行读取处理，事实上就是转交到了`sfs_read`函数进行处理（通过函数指针），然后调用了`sfs_io`函数，再进一步调用了`sfs_io_nolock`函数，这就是本次练习中需要完善的函数.
+2. 文件系统抽象层：
+
+`file_read`函数是内核提供的一项文件读取函数。在`file_read`函数中，通过文件描述符查找到了相应文件对应的内存中的`inode`信息，然后转交给`vop_read`进行读取处理。
+
+```c
+// read file
+int
+file_read(int fd, void *base, size_t len, size_t *copied_store) {
+    int ret; // 用于存储函数调用的返回值
+    struct file *file; // 文件结构体指针
+    *copied_store = 0; // 初始化已复制数据长度为0
+    // 通过文件描述符获取文件结构体指针，若失败则返回相应错误码
+    if ((ret = fd2file(fd, &file)) != 0) {
+        return ret;
+    }
+    // 检查文件是否可读，若不可读则返回错误码 -E_INVAL
+    if (!file->readable) {
+        return -E_INVAL;
+    }
+    fd_array_acquire(file); // 获取文件的引用计数
+    // 初始化缓冲区用于文件读取，设置缓冲区的起始位置为文件的当前位置
+    struct iobuf __iob, *iob = iobuf_init(&__iob, base, len, file->pos);
+    // 调用底层文件操作的读取函数，将数据读取到缓冲区中
+    ret = vop_read(file->node, iob);
+    // 获取实际已复制的数据长度
+    size_t copied = iobuf_used(iob);
+    // 若文件状态为打开状态，则更新文件的当前位置
+    if (file->status == FD_OPENED) {
+        file->pos += copied;
+    }
+    *copied_store = copied; // 更新已复制数据长度
+    fd_array_release(file); // 释放文件的引用计数
+    return ret; // 返回读取操作的结果
+}
+```
+
+`file_read`函数完成了如下工作：
+
+- 首先检查文件描述符是否有效，文件是否可读。
+
+- 初始化文件IO缓冲区并调用vop_read（）进行底层文件系统的读取操作，将数据读取到缓冲区中。
+
+- 更新文件的当前位置，并记录实际读取的数据长度。
+
+ 这里，我们就通过调用vop_read（）函数，到达了最关键的SFS层面，**实现真正的对硬盘操作，以此来进行文件的读入内存。**
+
+3. S文件系统层：
+
+在`vop_read`函数中，实际上通过先前的inode中函数指针的处理，使其从抽象方法具体到了我们的SFS文件系统中的sfs_read函数，事实上就是转交到了`sfs_read`函数进行处理（通过函数指针），然后调用了`sfs_io`函数。
+
+```c
+static int
+sfs_read(struct inode *node, struct iobuf *iob) {
+    return sfs_io(node, iob, 0);
+}
+```
+
+sfs_io函数需要三个参数，分别含义如下：node是对应文件的inode，iob是缓存，write表示是读还是写的布尔值（0表示读，1表示写），这里是0。其具体实现为：
+
+```c
+static inline int
+sfs_io(struct inode *node, struct iobuf *iob, bool write) {
+    // 获取SFS文件系统信息和SFS inode信息
+    struct sfs_fs *sfs = fsop_info(vop_fs(node), sfs);
+    struct sfs_inode *sin = vop_info(node, sfs_inode);
+    int ret;
+    lock_sin(sin); // 锁定SFS inode
+    {
+        size_t alen = iob->io_resid; // 获取待处理的IO长度
+        // 调用SFS文件系统的无锁IO操作函数
+        ret = sfs_io_nolock(sfs, sin, iob->io_base, iob->io_offset, &alen, write);
+        // 如果实际处理的IO长度不为0，更新iob以跳过已处理的部分
+        if (alen != 0) {
+            iobuf_skip(iob, alen);
+        }
+    }
+    unlock_sin(sin); // 解锁SFS inode
+    return ret; // 返回IO操作的结果
+}
+```
+
+在`sfs_io`中再进一步调用了`sfs_io_nolock`函数，这就是本次练习中需要完善的函数.
 
 ### `sfs_io_nolock()`函数编码
 
@@ -253,36 +298,316 @@ if (endpos % SFS_BLKSIZE != 0) {
 }
 ```
 
+在`sfs_io_nolock`的实现中，给出了对buf和对block的两种操作，即用sfs_buf_op和sfs_block_op两个函数指针进行读取，调用`sfs_rbuf`函数对磁盘上的一个磁盘块进行基本的块级 I/O 操作：
+
+```c
+/*
+ * sfs_rbuf - 用于对磁盘上的一个磁盘块进行基本的块级 I/O 操作（非块、非对齐 I/O），
+ * 使用 sfs->sfs_buffer 进行操作，同时提供锁保护以处理对磁盘块的互斥读取。
+ * @sfs:    将要被处理的 sfs_fs 文件系统
+ * @buf:    用于读取的缓冲区
+ * @len:    需要读取的长度
+ * @blkno:  磁盘块的编号
+ * @offset: 磁盘块内容中的偏移量
+ */
+int
+sfs_rbuf(struct sfs_fs *sfs, void *buf, size_t len, uint32_t blkno, off_t offset) {
+    // 确保 offset 在有效范围内
+    assert(offset >= 0 && offset < SFS_BLKSIZE && offset + len <= SFS_BLKSIZE);
+    int ret;
+    // 对 sfs_io 进行加锁，保证互斥读取磁盘块
+    lock_sfs_io(sfs);
+    {
+        // 调用 sfs_rwblock_nolock 进行磁盘块读取
+        if ((ret = sfs_rwblock_nolock(sfs, sfs->sfs_buffer, blkno, 0, 1)) == 0) {
+            // 将从磁盘块中读取的数据复制到用户提供的缓冲区中
+            memcpy(buf, sfs->sfs_buffer + offset, len);
+        }
+    }
+    // 解锁 sfs_io
+    unlock_sfs_io(sfs);
+    // 返回操作结果
+    return ret;
+}
+
+```
+
+其中调用了`sfs_rwblock_nolock`,此函数会调用设备接口dop_io 执行块级 I/O 操作，将操作传递给底层设备，由此进入外设接口层。
+
+```c
+/*
+ * sfs_rwblock_nolock - 用于基本的块级 I/O 操作，用于读/写一个磁盘块，
+ *                      在读/写磁盘块时不使用锁进行保护
+ * @sfs:   将要处理的 sfs_fs 结构
+ * @buf:   用于读/写的缓冲区
+ * @blkno: 磁盘块的编号
+ * @write: 布尔值，表示读还是写操作
+ * @check: 布尔值，如果为真，则检查磁盘块编号是否在有效范围内
+ */
+static int
+sfs_rwblock_nolock(struct sfs_fs *sfs, void *buf, uint32_t blkno, bool write, bool check) {
+    // 确保磁盘块编号在有效范围内（如果需要检查）
+    assert((blkno != 0 || !check) && blkno < sfs->super.blocks);
+    // 初始化 iobuf 结构
+    struct iobuf __iob, *iob = iobuf_init(&__iob, buf, SFS_BLKSIZE, blkno * SFS_BLKSIZE);
+    // 调用 dop_io 执行块级 I/O 操作，将操作传递给底层设备
+    return dop_io(sfs->dev, iob, write);
+}
+```
+
+4. 外设接口层：
+
+dop_io函数封装了device类型中的函数指针d_io，对于我们的读写磁盘操作，实际上是对disk0对象进行了d_io的调用，也就是其函数指针所指向的具体函数，即如下初始化中指向的disk0_io，这部分才是真正完成磁盘级别操作的代码：
+
+```c
+    dev->d_open = disk0_open;
+    dev->d_close = disk0_close;
+    dev->d_io = disk0_io;
+    dev->d_ioctl = disk0_ioctl;
+```
+
+disk0_io函数内部进行了大量的底层函数接口调用:
+
+```c
+/*
+ * disk0_io - 处理磁盘 I/O 操作，读取或写入数据
+ * @dev: 设备结构体指针
+ * @iob: I/O 缓冲区结构体指针
+ * @write: 标志是否为写操作
+ *
+ * 该函数处理磁盘 I/O 操作，根据参数决定是读取还是写入数据。它会将数据从 I/O 缓冲区移动到 disk0_buffer 中，
+ * 然后调用相应的读取或写入函数进行实际的磁盘 I/O 操作。
+ */
+static int
+disk0_io(struct device *dev, struct iobuf *iob, bool write) {
+    // 获取偏移量和剩余长度
+    off_t offset = iob->io_offset;
+    size_t resid = iob->io_resid;
+    // 计算起始块号和块数
+    uint32_t blkno = offset / DISK0_BLKSIZE;
+    uint32_t nblks = resid / DISK0_BLKSIZE;
+
+    /* 不允许非块对齐的 I/O 操作 */
+    if ((offset % DISK0_BLKSIZE) != 0 || (resid % DISK0_BLKSIZE) != 0) {
+        return -E_INVAL;
+    }
+
+    /* 不允许超出磁盘边界的 I/O 操作 */
+    if (blkno + nblks > dev->d_blocks) {
+        return -E_INVAL;
+    }
+
+    /* 读/写的块数为零，无需进行操作 */
+    if (nblks == 0) {
+        return 0;
+    }
+
+    lock_disk0();
+    while (resid != 0) {
+        size_t copied, alen = DISK0_BUFSIZE;
+        if (write) {
+            // 对于写操作，将数据从 iob 移动到 disk0_buffer
+            iobuf_move(iob, disk0_buffer, alen, 0, &copied);
+            // 确保成功移动了一些数据且移动的数据是块对齐的
+            assert(copied != 0 && copied <= resid && copied % DISK0_BLKSIZE == 0);
+            // 计算块数并调用 disk0_write_blks_nolock 进行磁盘写操作
+            nblks = copied / DISK0_BLKSIZE;
+            disk0_write_blks_nolock(blkno, nblks);
+        } else {
+            // 对于读操作，从磁盘读取数据到 disk0_buffer
+            if (alen > resid) {
+                alen = resid;
+            }
+            nblks = alen / DISK0_BLKSIZE;
+            disk0_read_blks_nolock(blkno, nblks);
+            // 将数据从 disk0_buffer 移动到 iob
+            iobuf_move(iob, disk0_buffer, alen, 1, &copied);
+            // 确保成功移动了所有数据且移动的数据是块对齐的
+            assert(copied == alen && copied % DISK0_BLKSIZE == 0);
+        }
+        resid -= copied, blkno += nblks;
+    }
+    unlock_disk0();
+    return 0;
+}
+```
+
+这里完成了对 `disk0` 设备执行IO操作。根据给定的 `iob` 信息，它会将数据从 `iob` 中移动到 `disk0_buffer` 或者将 `disk0_buffer` 中的数据移动到 `iob` 中。具体的读写过程还在在底层的`disk0_read_blks_nolock` 和 `disk0_write_blks_nolock` 两个函数和移动数据的` iobuf_move` 函数中完成。以读取的disk0_read_blks_nolock函数为例，实际上调用了ide的接口，完成了这一工作：
+
+```c
+/*
+ * disk0_read_blks_nolock - 从磁盘读取指定块数的数据，不获取磁盘锁
+ * @blkno: 起始块号
+ * @nblks: 读取的块数
+ *
+ * 该函数通过调用 ide_read_secs 从磁盘读取指定块数的数据到 disk0_buffer 中。
+ */
+static void
+disk0_read_blks_nolock(uint32_t blkno, uint32_t nblks) {
+    int ret;
+    // 计算起始扇区号和扇区数
+    uint32_t sectno = blkno * DISK0_BLK_NSECT, nsecs = nblks * DISK0_BLK_NSECT;
+    // 调用 ide_read_secs 读取数据
+    if ((ret = ide_read_secs(DISK0_DEV_NO, sectno, disk0_buffer, nsecs)) != 0) {
+        // 读取失败时触发 panic
+        panic("disk0: read blkno = %d (sectno = %d), nblks = %d (nsecs = %d): 0x%08x.\n",
+                blkno, sectno, nblks, nsecs, ret);
+    }
+}
+```
+
+跳过ide内部冗余繁杂的封装和函数指针处理，直接到最底层的处理接口，即ramdisk_read函数，可以看到最底层的实现，实际上只是一个简单的memcpy实现:
+
+```c
+/*
+ * ramdisk_read - 从 RAM 磁盘设备读取数据
+ * @dev:    RAM 磁盘设备的指针
+ * @secno:  起始扇区编号
+ * @dst:    存储读取数据的目标缓冲区
+ * @nsecs:  读取扇区的数量
+ */
+static int ramdisk_read(struct ide_device *dev, size_t secno, void *dst,
+                        size_t nsecs) {
+    // 限制读取扇区数量不超过设备剩余的扇区数
+    nsecs = MIN(nsecs, dev->size - secno);
+    // 如果 nsecs 为负数，返回错误
+    if (nsecs < 0) return -1;
+    // 使用 memcpy 从 RAM 磁盘设备读取数据到目标缓冲区
+    memcpy(dst, (void *)(dev->iobase + secno * SECTSIZE), nsecs * SECTSIZE);
+    // 返回操作结果
+    return 0;
+}
+
+```
+
+由此，从通用文件访问层到外设接口层的文件读取过程分析完成。
+
 ## 练习2: 完成基于文件系统的执行程序机制的实现（需要编码）
 
 > 改写`proc.c`中的`load_icode`函数和其他相关函数，实现基于文件系统的执行程序机制。执行：`make qemu`。如果能看看到sh用户程序的执行界面，则基本成功了。如果在sh用户界面上可以执行”ls”,”hello”等其他放置在sfs文件系统中的其他执行程序，则可以认为本实验基本成功。
 
-`load_icode`函数用于从磁盘上读取可执行文件，并且加载到内存中，完成内存空间的初始化。
+在本次实验中，主要修改了proc.c中的以下函数：
 
-之前的实验仅仅将原先就加载到了内核内存空间中的ELF可执行文件加载到用户内存空间中，而没有涉及从磁盘读取数据的操作，而且之前的时候并没有对`execve`所执行的程序传入参数。
+```C
+alloc_proc
+proc_run
+do_fork
+load_icode
+```
 
-基本思路和Lab5近似，为：
+### （一）alloc_proc
 
-- 为当前进程创建一个新的内存管理器
+`alloc_proc`函数用于分配一个 `proc_struct` 结构并初始化所有 `proc_struct` 的字段。
 
-* 创建一个新的页目录表（PDT），并将`mm->pgdir`设置为PDT的内核虚拟地址
-* 将二进制文件的TEXT/DATA/BSS部分复制到进程的内存空间中
-     *    读取文件中的原始数据内容并解析`elfhdr`
-     *    根据`elfhdr`中的信息，读取文件中的原始数据内容并解析`proghdr`
-     *    调用`mm_map`构建与TEXT/DATA相关的vma
-     *    调用`pgdir_alloc_page`为TEXT/DATA分配页，读取文件中的内容并将其复制到新分配的页中
-     *    调用`pgdir_alloc_page`为BSS分配页，在这些页中使用`memset`将其置零
-* 调用`mm_map`设置用户堆栈，并将参数放入用户堆栈中
-* 设置当前进程的内存管理器、cr3，重置`pgidr`（使用`lcr3`宏）
-* 在用户堆栈中设置`uargc`和`uargv`
-* 为用户环境设置`trapframe`
-* 如果上述步骤失败，应清理环境。
+在本次实验中，Lab8中的进程控制块 `proc_struct` 相较于我们上一次完成的Lab5中新增了以下字段：
 
-完整代码见代码文件。这里只列出Lab8修改的部分。
+```C
+struct proc_struct {
+	......
+	struct run_queue *rq;// 包含进程的运行队列
+    list_entry_t run_link;// 连接到运行队列的条目
+    int time_slice;// 占用 CPU 的时间片
+    skew_heap_entry_t lab6_run_pool;//仅用于实验6：在运行池中的条目
+    uint32_t lab6_stride; //仅用于实验6：进程的当前步幅
+    uint32_t lab6_priority;//仅用于实验6：进程的优先级，由lab6_set_priority(uint32_t) 设置
+    //Lab8新增
+    struct files_struct *filesp;//指向进程的文件相关信息结构体的指针
+}
+```
 
-首先，当前进程创建一个新的 `mm` 结构；创建一个新的页目录表（PDT），并将 `mm->pgdir` 设置为页目录表的内核虚拟地址。
+因此相应的，我们也需要在初始化函数中增加对于这些新增字段的初始化方法：
 
-接下来，将二进制文件的TEXT/DATA/BSS部分复制到进程的内存空间中。首先读取文件中的原始数据内容并解析`elfhdr`，这里与之前实验不同，需要从文件中读取`elf header`。需要调用`load_icode_read`函数，在文件中读取ELF header。这个函数是用来从文件描述符fd指向的文件中读取数据到缓冲区中的。传入的参数包括`fd`（文件描述符）、`elf`（指向读取数据的缓冲区）、`sizeof(struct elfhdr)`（要读取的数据长度）和0（文件中的偏移量）。
+```C
+static struct proc_struct *alloc_proc(void) {
+    struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
+    if (proc != NULL) {
+    ....
+     proc->rq = NULL;//将rq初始化为 NULL，表示该进程没有被放入任何运行队列。
+     list_init(&(proc->run_link));//将运行队列连接链表初始化为空
+     proc->time_slice = 0;//占用 CPU 的时间片初始化为0
+     proc->lab6_run_pool.left = proc->lab6_run_pool.right = proc->lab6_run_pool.parent = NULL;//Lab6中所使用的的二叉堆，将左子节点、右子节点和父节点初始化为 NULL
+     proc->lab6_stride = 0;//进程的当前步幅初始化为 0。
+     proc->lab6_priority = 0;//进程的优先级初始化为 0。
+     proc->filesp = NULL;//Lab8新增，进程没有打开任何文件，没有指向具体结构体的指针
+}
+```
+
+### （二）proc_run
+
+`proc_run`函数用于将参数中的进程 `proc` 在 `CPU` 上设为运行状态，在本次实验中需要在切换页目录表后刷新TLB表。
+
+```C
+proc_run(struct proc_struct *proc) {
+ 	if (proc != current) {
+ 	...
+ 	        local_intr_save(intr_flag);
+        {
+            current = proc;
+            lcr3(next->cr3);
+            flush_tlb();//添加 flush_tlb 语句，以在切换页目录表后对 TLB 刷新。
+            switch_to(&(prev->context), &(next->context));
+        }
+```
+
+由于页目录表的切换可能导致 TLB 中的缓存的映射关系失效，因此需要刷新 TLB来确保新的进程的地址空间映射关系正确加载，避免出现地址转换错误。
+
+### （三）do_fork
+
+`do_fork`函数用于创建一个新的子进程，在本次实验中，我们使用copy_files来复制文件描述符。
+
+```C
+int  do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
+    ...
+    if ((proc = alloc_proc()) == NULL) {
+        goto fork_out;
+    }
+    proc->parent = current;
+    assert(current->wait_state == 0);
+
+    if (setup_kstack(proc) != 0) {
+        goto bad_fork_cleanup_proc;
+    }
+  
+    if (copy_files(clone_flags, proc) != 0) {//Lab8新增：copy_files用于复制文件描述符
+        goto bad_fork_cleanup_kstack;//复制文件描述符时出现了错误后跳转
+    }
+
+    if (copy_mm(clone_flags, proc) != 0) {
+        goto bad_fork_cleanup_fs;
+    }
+    ...
+} 
+```
+
+`copy_files()`函数成功的话，返回值应该是0，如果返回值不为0，就跳转到`bad_fork_cleanup_kstack`标签上清理空间，释放当前资源。
+
+### （四）load_icode
+
+**`load_icode`函数作用：**用于从磁盘上读取可执行文件并加载到内存中，完成内存空间的初始化。
+
+**Lab8与之前实验的区别**：之前的实验用户内存空间中所加载的ELF可执行文件是已经被加载到了内核内存空间中的，没有涉及从磁盘读取数据的操作，也没有对`execve`所执行的程序传入参数。而在Lab8中，我们需要模拟磁盘的读写操作，那么就需要读入原始的ELF文件数据。
+
+**`load_icode()`函数编写的基本思路：**与Lab5大致相同，完整思路如下：
+
+1. 为当前进程创建一个新的内存管理器
+2. 创建一个新的页目录表（PDT），并将`mm->pgdir`设置为PDT的内核虚拟地址
+3. 将二进制文件的TEXT/DATA/BSS部分复制到进程的内存空间中
+   1. 读取文件中的原始数据内容并解析`elfhdr`
+   2. 根据`elfhdr`中的信息，读取文件中的原始数据内容并解析`proghdr`
+   3. 调用`mm_map`构建与TEXT/DATA相关的vma
+   4. 调用`pgdir_alloc_page`为TEXT/DATA分配页，读取文件中的内容并将其复制到新分配的页中
+   5. 调用`pgdir_alloc_page`为BSS分配页，在这些页中使用`memset`将其置零
+4. 调用`mm_map`设置用户堆栈，并将参数放入用户堆栈中
+5. 设置当前进程的内存管理器、cr3，重置`pgidr`（使用`lcr3`宏）
+6. 在用户堆栈中设置`uargc`和`uargv`
+7. 为用户环境设置`trapframe`
+8. 如果上述步骤失败，应清理环境。
+
+**load_icode()在Lab8修改的部分：**
+
+**（1）**首先，当前进程创建一个新的 `mm` 结构`(mm_create())`；创建一个新的页目录表（PDT），并将 `mm->pgdir` 设置为页目录表的内核虚拟地址`(setup_pgdir(mm))`。
+
+**（2）**接下来，将二进制文件的`TEXT/DATA/BSS`部分复制到进程的内存空间中。首先调用`load_icode_read`函数读取文件中的原始数据内容并解析`elfhdr`。这里与之前实验不同，需要从文件中读取`ELF header`。`load_icode_read`函数用来从文件描述符`fd`指向的文件中读取数据到缓冲区中，传入的参数包括`fd`（文件描述符）、`elf`（指向读取数据的缓冲区）、`sizeof(struct elfhdr)`（要读取的数据长度）和`0`（文件中的偏移量）。
 
 ```c
 // 将二进制文件的TEXT/DATA/BSS部分复制到进程的内存空间中
@@ -295,9 +620,20 @@ if ((ret = load_icode_read(fd, elf, sizeof(struct elfhdr), 0)) != 0)
 }
 ```
 
-读取后，检查是否是一个合法的ELF文件。
+**（3）**读取后，检查是否是一个合法的ELF文件。
 
-之后，根据`elfhdr`中的信息，读取文件中的原始数据内容并解析`proghdr`。需要根据每一段的大小和基地址来分配不同的内存空间。这里再次调用`load_icode_read`函数从文件特定偏移处读取每个段的详细信息（包括大小、基地址等等）。
+合法的ELF文件中的魔数通常为“0X7FELF”，转化为小端序为”0x464C457FU”。宏定义ELF_MAGIC保存了这个值，因此我们直接使用这个宏定义来判断ELF文件的魔数是否正确。
+
+```C
+if (elf->e_magic != ELF_MAGIC){
+    ret = -E_INVAL_ELF;
+    goto bad_elf_cleanup_pgdir;
+}
+```
+
+**（4）**根据`elfhdr`中的信息，读取文件中的原始数据内容并解析`proghdr`
+
+再次调用`load_icode_read`函数从文件特定偏移处读取每个段的详细信息（包括大小、基地址等等），然后我们就可以根据每一段的大小和基地址来为其分配不同的内存空间。
 
 ```c
 // 根据elfhdr中的信息，读取文件中的原始数据内容并解析proghdr
@@ -312,31 +648,121 @@ for (phnum = 0; phnum < elf->e_phnum; phnum++)
     {
         goto bad_cleanup_mmap;
     }
-    // 如果不是需要加载的段，直接跳过
-    // 如果文件头标明的文件段大小大于所占用的内存大小(memsz可能包括了BSS，所以这是错误的程序段头)
 ```
 
-调用` mm_map` 函数设置新的 VMA，设置相关权限，建立`ph->p_va`到`ph->va+ph->p_memsz`的合法虚拟地址空间段。
+在分配空间时我们解决了三种特殊情况：
 
-接下来，分配内存，并将每个程序段的内容（`from, from+end`）复制到进程的内存（`la, la+end`）。在复制 TEXT/DATA 段的内容的过程中，首先分配一个内存页，建立la对应页的虚实映射关系。然后调用`load_icode_read`函数读取elf对应段内的数据并写入至该内存中。之后，构建二进制程序的 BSS 段。
+- 如果不是需要加载的段，直接跳过
 
-```c
-    // LAB8 读取elf对应段内的数据并写入至该内存中
-    if ((ret = load_icode_read(fd, page2kva(page) + off, size, offset)) != 0)
-    {
+  ```C
+  if (ph->p_type != ELF_PT_LOAD){//p_type不为加载类型
+      continue; // 不是需要加载的段，直接跳过
+  }
+  ```
+
+- 文件头标明的文件段大小大于所占用的内存大小，返回错误
+
+  ```C
+  if (ph->p_filesz > ph->p_memsz){文件头标明的文件段大小大于所占用的内存大小
+  //memsz可能包括了BSS，所以这是错误的程序段头
+      ret = -E_INVAL_ELF;//返回错误码
+      goto bad_cleanup_mmap;//跳转清理标签
+  }
+  ```
+
+- 文件大小为0，直接跳过
+
+  ```C
+  if (ph->p_filesz == 0) {//文件中的大小为0
+      {
+      // 继续执行；
+      // 在这里什么都不做，因为静态变量可能不占用任何空间
+      }
+  }
+  ```
+
+**（5）**调用mm_map构建与TEXT/DATA相关的虚拟内存地址vma
+
+首先根据程序段头的标志位 `p_flags` 设置相关权限，之后调用` mm_map` 函数设置新的 VMA，建立`ph->p_va`到`ph->va+ph->p_memsz`的合法虚拟地址空间段。
+
+**（6）**逐页分配物理内存空间
+
+接下来我们需要分配内存，并将每个程序段的内容（`from, from+end`）复制到进程的内存（`la, la+end`）。
+
+在复制 TEXT/DATA 段的内容的while循环中，首先调用pgdir_alloc_page()函数为所需要复制的TEXT/DATA段分配一个内存页，建立la对应页的虚实映射关系。然后调用`load_icode_read`函数读取`elf`对应段内的`size`大小的数据块并写入至该内存中。
+
+```C
+while (start < end) {// 为 TEXT/DATA 段逐页分配物理内存空间
+    if ((page = pgdir_alloc_page(mm->pgdir, la, perm)) == NULL) {
+        ret = -E_NO_MEM;
         goto bad_cleanup_mmap;
     }
-	// ...
+
+    off = start - la, size = PGSIZE - off, la += PGSIZE;//更新当前变量
+
+    if (end < la) {
+        size -= la - end;// 每次读取size大小的块，直至全部读完
+    }
+
+    if ((ret = load_icode_read(fd, page2kva(page) + off, size, offset)) != 0) { 
+        goto bad_cleanup_mmap;
+    }
+
+    start += size, offset += size;//更新当前变量
+}
+
+end = ph->p_va + ph->p_memsz;// 计算终止地址，建立BSS段
+    
+if (start < la) {//存在 BSS 段,且TEXT/DATA 段分配的最后一页没有被完全占用
+    /* ph->p_memsz == ph->p_filesz */
+    if (start == end) {
+        continue;
+    }
+    off = start + PGSIZE - la, size = PGSIZE - off;
+    if (end < la) {
+        size -= la - end;
+    }
+    memset(page2kva(page) + off, 0, size);//清零初始化用于存放BSS段
+    start += size;
+    assert((end < la && start == end) || (end >= la && start == la));
 }
 ```
 
-上述步骤结束后，需要关闭读取的ELF文件。
+之后，构建二进制程序的 BSS 段，如果 BSS 段还需要更多的内存空间就进一步进行分配。
+
+```c
+while (start < end){
+    if ((page = pgdir_alloc_page(mm->pgdir, la, perm)) == NULL){
+        ret = -E_NO_MEM;// 为 BSS 段分配新的物理内存页
+        goto bad_cleanup_mmap;
+    }
+    off = start - la, size = PGSIZE - off, la += PGSIZE;
+    if (end < la){
+        size -= la - end;
+    }
+    memset(page2kva(page) + off, 0, size);
+    start += size;
+}
+```
+
+**（7）**关闭读取的ELF文件
 
 ```c
 sysfile_close(fd);
 ```
 
-之后，设置当前进程的` mm`、`sr3`，并设置 CR3 寄存器为页目录表的物理地址。
+**（8）**设置当前进程的内存管理器、cr3，重置pgidr
+
+设置当前进程的` mm`、`sr3`，并设置 CR3 寄存器为页目录表的物理地址。
+
+```c
+mm_count_inc(mm);
+current->mm = mm;
+current->cr3 = PADDR(mm->pgdir);//把mm->pgdir赋值到cr3寄存器中,更新用户进程的虚拟内存空间
+lcr3(PADDR(mm->pgdir));
+```
+
+**（9）**在用户堆栈中设置uargc和uargv
 
 接下来，构建用户栈内存，为用户栈设置对应的合法虚拟内存空间，并将命令行参数和用户栈的布局写入用户空间。LAB8 需要处理用户栈中传入的参数， 在用户堆栈中设置`uargc`和`uargv`。
 
@@ -381,7 +807,17 @@ stacktop = (uintptr_t)uargv - sizeof(int);
 *(int *)stacktop = argc;
 ```
 
-最后，为用户环境设置 `trapframe`。
+**（10）**为用户环境设置 `trapframe`。
+
+```C
+struct trapframe *tf = current->tf;
+uintptr_t sstatus = tf->status;//设置状态寄存器 sstatus
+memset(tf, 0, sizeof(struct trapframe));
+tf->gpr.sp = stacktop;//设置用户栈指针（sp）
+tf->epc = elf->e_entry;//用户程序入口地址（epc
+tf->status = sstatus & ~(SSTATUS_SPP | SSTATUS_SPIE);
+ret = 0;
+```
 
 完成编码后，`make grade`结果：
 
